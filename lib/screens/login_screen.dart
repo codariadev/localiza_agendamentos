@@ -1,6 +1,7 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import '../core/firebase_auth_service.dart';
+import 'home_screen.dart';
+import 'package:localiza_agendamentos/screens/hig_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,75 +12,58 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
+  final FirebaseAuthService _authService = FirebaseAuthService();
   bool _isLoading = false;
 
   Future<void> _login() async {
     setState(() => _isLoading = true);
 
-    final senhaDigitada = _passwordController.text.trim();
-
-    if (senhaDigitada.isEmpty) {
-      _showError('Informe a senha');
-      setState(() => _isLoading = false);
-      return;
-    }
-
     try {
-      // Busca primeiro se é vendedor
-      final queryVendedor = await FirebaseFirestore.instance
-          .collection('colaboradores')
-          .where('senha', isEqualTo: senhaDigitada)
-          .where('cargo', isEqualTo: 'vendedor')
-          .get();
+      final senhaDigitada = _passwordController.text.trim();
+      final userData = await _authService.login(senhaDigitada);
 
-      // Busca depois se é higienizador
-      final queryHigienizador = await FirebaseFirestore.instance
-          .collection('colaboradores')
-          .where('senha', isEqualTo: senhaDigitada)
-          .where('cargo', isEqualTo: 'higienizador')
-          .get();
-
-      // Se for vendedor
-      if (queryVendedor.docs.isNotEmpty) {
-        final userData = queryVendedor.docs.first.data();
-        final nome = userData['nome'] ?? 'Usuário';
-        final deviceToken = await FirebaseMessaging.instance.getToken();
-
-        Navigator.pushReplacementNamed(
-          context,
-          '/home',
-          arguments: {'nome': nome, 'deviceToken': deviceToken},
-        );
-      }
-      // Se for higienizador
-      else if (queryHigienizador.docs.isNotEmpty) {
-        final userData = queryHigienizador.docs.first.data();
-        final nome = userData['nome'] ?? 'Usuário';
-        final deviceToken = await FirebaseMessaging.instance.getToken();
-
-        Navigator.pushReplacementNamed(
-          context,
-          '/hig_screen', // ✅ certifique-se de que esta rota existe no main.dart
-          arguments: {'nome': nome, 'deviceToken': deviceToken},
-        );
-      }
-      // Se não for nenhum dos dois
-      else {
+      if (userData == null) {
         _showError('Senha incorreta ou cargo inválido');
+      } else {
+        final nome = userData['nome'];
+        final cargo = userData['cargo'];
+        final token = userData['token'];
+
+        if (cargo == 'vendedor') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => HomeScreen(
+                nomeVendedor: nome,
+                tokenDevice: token,
+              ),
+            ),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => HigScreen(
+                nome: nome,
+                tokenDevice: token,
+              ),
+            ),
+          );
+        }
       }
     } catch (e) {
-      _showError('Ocorreu um erro: $e');
+      _showError('Erro ao fazer login: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showError(String message) {
+  void _showError(String msg) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Erro'),
-        content: Text(message),
+        content: Text(msg),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -99,10 +83,6 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Login'),
-        backgroundColor: const Color.fromRGBO(8, 143, 66, 1),
-      ),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(40.0),
@@ -115,8 +95,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   'lib/assets/images/splash.png',
                   width: 200,
                   height: 200,
-                  fit:BoxFit.contain
-                )
+                  fit: BoxFit.contain,
+                ),
               ),
               const Spacer(),
               const SizedBox(height: 40),
@@ -127,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   obscureText: true,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    color: Color.fromRGBO(241,124,39,1),
+                    color: Color.fromRGBO(241, 124, 39, 1),
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
@@ -138,16 +118,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     fillColor: Colors.grey[200],
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          const BorderSide(color: Color.fromRGBO(241,124,39,1), width: 2),
+                      borderSide: const BorderSide(
+                        color: Color.fromRGBO(241, 124, 39, 1),
+                        width: 2,
+                      ),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: const BorderSide(
-                          color: Color.fromRGBO(241,124,39,1), width: 2),
+                        color: Color.fromRGBO(241, 124, 39, 1),
+                        width: 2,
+                      ),
                     ),
-                    prefixIcon:
-                        const Icon(Icons.lock, color: Color.fromRGBO(241,124,39,1)),
+                    prefixIcon: const Icon(
+                      Icons.lock,
+                      color: Color.fromRGBO(241, 124, 39, 1),
+                    ),
                   ),
                 ),
               ),
@@ -157,7 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 height: 48,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color.fromRGBO(241,124,39,1),
+                    backgroundColor: const Color.fromRGBO(241, 124, 39, 1),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -178,13 +164,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                 ),
               ),
-                        const Spacer(),
+              const Spacer(),
             ],
           ),
         ),
       ),
       backgroundColor: const Color.fromRGBO(8, 143, 66, 1),
-      
     );
   }
 }
